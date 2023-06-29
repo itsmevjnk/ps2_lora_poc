@@ -32,7 +32,10 @@ void setup() {
 #define ADDR_TX                 0x55 // transmitter address
 #define ADDR_RX                 0xAA // receiver address
 
-#define RESP_TIMEOUT            30 // response timeout (mS)
+//#define RESP_TIMEOUT            30 // response timeout (mS), undefine to disable
+
+uint32_t t_min = 0xFFFFFFFF, t_max = 0, t_avg = 0;
+float packets = 0;
 
 void loop() {
   // put your main code here, to run repeatedly:
@@ -46,7 +49,11 @@ void loop() {
   }
   Serial.println(F("OK."));
   uint32_t t_start = millis();
+#ifdef RESP_TIMEOUT
   while(millis() - t_start < RESP_TIMEOUT) {
+#else
+  while(1) {
+#endif
     int pkt_size = LoRa.parsePacket();
     if(pkt_size) {
       Serial.print(F("Received a packet: "));
@@ -66,6 +73,13 @@ void loop() {
           /* imitate read_gamepad() */
           ps2.last_buttons = ps2.buttons; //store the previous buttons states
           ps2.buttons =  (uint16_t)(ps2.PS2data[4] << 8) + ps2.PS2data[3];   //store as one value for multiple functions
+          packets++;
+          uint32_t t_pkt = millis() - t_start;
+          if(t_min > t_pkt) t_min = t_pkt;
+          if(t_max < t_pkt) t_max = t_pkt;
+          t_avg = (t_avg * (float)(packets - 1) + (float)t_pkt) / (float)packets;
+          Serial.print(F("Waiting time: ")); Serial.print(t_pkt); Serial.print(F("mS (min: ")); Serial.print(t_min); Serial.print(F(", max: ")); Serial.print(t_max); Serial.print(F(", avg: ")); Serial.print(t_avg); Serial.println(')');
+          ps2_loop(); // run loop
         } else if(packet[1] == RESP_POLL_FAIL) {
           Serial.println(F("Controller error"));
         }
@@ -73,8 +87,10 @@ void loop() {
       }
     }
   }
+#ifdef RESP_TIMEOUT
   /* if we end up here then we've timed out */
   Serial.println(F("Timed out waiting for response"));
+#endif
 }
 
 /* copied from PS2X example code */
